@@ -1,0 +1,59 @@
+import { createContext, useContext, useState, type ReactNode } from 'react';
+
+export type Language = 'en' | 'de' | 'zh';
+const translations: Record<string, [string, string]> = {
+  'Experience': ['Erlebnis', '体验'], 'Decisions': ['Entscheidungen', '决策'], 'Review': ['Prüfung', '审核'], 'Research': ['Forschung', '研究'],
+  'Think locally.': ['Lokal denken.', '本地思考。'], 'Decide intelligently.': ['Intelligent entscheiden.', '智能决策。'],
+  'START DECIDING': ['ENTSCHEIDUNG STARTEN', '开始决策'], 'LOCAL INTELLIGENCE / HUMAN JUDGMENT': ['LOKALE INTELLIGENZ / MENSCHLICHES URTEIL', '本地智能 / 人类判断'],
+  'Intelligence, without the distance.': ['Intelligenz. Ohne Umwege.', '智能，无需远行。'],
+  'A smaller model. A more considered decision. Entirely on your machine.': ['Ein kleineres Modell. Eine durchdachtere Entscheidung. Vollständig auf Ihrem Gerät.', '更小的模型，更审慎的决策。完全在您的设备上运行。'],
+  'EXPLORE THE SYSTEM': ['SYSTEM ENTDECKEN', '探索系统'], 'LOCAL BY DESIGN': ['LOKAL KONZIPIERT', '为本地而设计'],
+  'Your machine. Your decisions.': ['Ihr Gerät. Ihre Entscheidungen.', '您的设备，您的决策。'],
+  'Fine-tuned Kev, orchestrated by your existing n8n workflow. No cloud inference. No data leaving your machine.': ['Feinabgestimmtes Kev, gesteuert durch Ihren bestehenden n8n-Workflow. Keine Cloud-Inferenz. Ihre Daten bleiben auf Ihrem Gerät.', '微调 Kev 由现有 n8n 工作流编排。无云端推理，数据不离开您的设备。'],
+  'Local system': ['Lokales System', '本地系统'], 'Connected': ['Verbunden', '已连接'], 'Disconnected': ['Nicht verbunden', '未连接'],
+  'Availability unverified': ['Verfügbarkeit ungeprüft', '可用性未验证'], 'Last inference succeeded': ['Letzte Inferenz erfolgreich', '上次推理成功'],
+  'VALIDATION F1': ['VALIDIERUNGS-F1', '验证 F1'], 'Fine-tuned Kev 0.8B': ['Feinabgestimmtes Kev 0.8B', '微调 Kev 0.8B'],
+  'Validation, not a safety guarantee.': ['Validierung, keine Sicherheitsgarantie.', '验证结果，非安全保证。'],
+  'VIEW RESEARCH': ['FORSCHUNG ANSEHEN', '查看研究'], '01 / LOCAL INFERENCE': ['01 / LOKALE INFERENZ', '01 / 本地推理'], '02 / HUMAN OVERSIGHT': ['02 / MENSCHLICHE AUFSICHT', '02 / 人类监督'], '03 / MEASURED EVIDENCE': ['03 / MESSBARE EVIDENZ', '03 / 实测证据'],
+  'Small model. Real inference.': ['Kleines Modell. Echte Inferenz.', '小模型，真实推理。'], 'Uncertainty needs a human.': ['Unsicherheit braucht Menschen.', '不确定性需要人类。'], 'Measured, not assumed.': ['Gemessen, nicht angenommen.', '实测，而非假设。'],
+  'Vehicle complaints meet fine-tuned Kev 0.8B, running locally through MLX on Apple Silicon.': ['Fahrzeugbeschwerden treffen auf feinabgestimmtes Kev 0.8B, lokal über MLX auf Apple Silicon.', '车辆投诉由微调 Kev 0.8B 分析，通过 MLX 在 Apple Silicon 上本地运行。'],
+  'Between 0.01 and 0.99, your existing n8n review workflow keeps a person in the loop.': ['Zwischen 0,01 und 0,99 übernimmt Ihr bestehender n8n-Prüfworkflow die menschliche Kontrolle.', '在 0.01 和 0.99 之间，现有 n8n 审核工作流保留人工监督。'],
+  '1,000 validation records. Transparent trade-offs. No invented production claims.': ['1.000 Validierungsdatensätze. Transparente Abwägungen. Keine erfundenen Produktionsversprechen.', '1,000 条验证记录，透明呈现权衡，不虚构生产结论。'],
+  'Open decisions': ['Entscheidungen öffnen', '打开决策'], 'Open review': ['Prüfung öffnen', '打开审核'], 'Explore research': ['Forschung entdecken', '探索研究'],
+  'Local setup guide': ['Lokale Einrichtung', '本地设置指南'], 'Offline Decision Intelligence': ['Offline-Entscheidungsintelligenz', '离线决策智能'],
+  'Checking local backend…': ['Lokales System wird geprüft…', '正在检查本地系统…'], 'Local n8n connected': ['Lokales n8n verbunden', '本地 n8n 已连接'], 'Local backend disconnected': ['Lokales System nicht verbunden', '本地系统未连接'],
+  'Review history endpoint reachable. Kev availability is verified on inference.': ['Prüfverlauf erreichbar. Kev-Verfügbarkeit wird bei der Inferenz geprüft.', '审核历史可访问。Kev 可用性在推理时验证。'],
+  'Run DecideFast locally to connect to your n8n and Kev services.': ['Starten Sie DecideFast lokal, um n8n und Kev zu verbinden.', '本地运行 DecideFast 以连接 n8n 和 Kev 服务。'],
+  'Recheck': ['Erneut prüfen', '重新检查'], 'No local records available': ['Keine lokalen Einträge verfügbar', '无本地记录'], 'No review records yet': ['Noch keine Prüfeinträge', '暂无审核记录'],
+  'Connect your local n8n workflow to load real review history.': ['Verbinden Sie Ihren lokalen n8n-Workflow für den echten Prüfverlauf.', '连接本地 n8n 工作流以加载真实审核历史。'],
+  'New records will appear after your local workflow processes a complaint.': ['Neue Einträge erscheinen nach der Verarbeitung einer Beschwerde.', '本地工作流处理投诉后将出现新记录。'], 'Open Live Decision': ['Entscheidung starten', '打开实时决策'],
+  'LOCAL INFERENCE': ['LOKALE INFERENZ', '本地推理'], 'Live Decision': ['Entscheidungen', '决策'], 'Turn a vehicle complaint into a model-assisted routing decision.': ['Aus einer Fahrzeugbeschwerde wird eine modellgestützte Routing-Entscheidung.', '将车辆投诉转化为模型辅助的分流决策。'],
+  'Complaint input': ['Beschwerde eingeben', '输入投诉'], 'Complaint ID': ['Beschwerde-ID', '投诉编号'], 'Required': ['Erforderlich', '必填'], 'Complaint description': ['Beschwerdebeschreibung', '投诉描述'],
+  'e.g. DEMO-001': ['z. B. DEMO-001', '例如 DEMO-001'], 'Describe the reported issue, symptoms, and vehicle behavior…': ['Beschreiben Sie das Problem, die Symptome und das Fahrzeugverhalten…', '描述报告的问题、症状和车辆行为…'],
+  'Processed entirely on your machine': ['Vollständig auf Ihrem Gerät verarbeitet', '完全在您的设备上处理'], 'characters': ['Zeichen', '字符'], 'Analyzing locally…': ['Lokale Analyse…', '正在本地分析…'], 'Analyze Complaint': ['Beschwerde analysieren', '分析投诉'],
+  'Actual request time:': ['Tatsächliche Anfragezeit:', '实际请求时间：'], 'Analysis unavailable': ['Analyse nicht verfügbar', '分析不可用'], 'Decision output': ['Entscheidungsergebnis', '决策输出'], 'PENDING HUMAN REVIEW': ['MENSCHLICHE PRÜFUNG AUSSTEHEND', '等待人工审核'],
+  'Model probability · not a confirmed defect diagnosis': ['Modellwahrscheinlichkeit · keine bestätigte Defektdiagnose', '模型概率 · 非确认的缺陷诊断'], 'Model': ['Modell', '模型'], 'Inference latency': ['Inferenzlatenz', '推理延迟'], 'Request ID': ['Anfrage-ID', '请求编号'], 'Not returned': ['Nicht übermittelt', '未返回'],
+  'AUTO_NO threshold': ['AUTO_NO-Schwelle', 'AUTO_NO 阈值'], 'AUTO_YES threshold': ['AUTO_YES-Schwelle', 'AUTO_YES 阈值'], 'Review window: 72 hours, enforced by n8n.': ['Prüffrist: 72 Stunden, durch n8n durchgesetzt.', '审核时限：72 小时，由 n8n 执行。'],
+  'Open n8n review form': ['n8n-Prüfformular öffnen', '打开 n8n 审核表单'], 'No valid local review URL was returned. Check your n8n response.': ['Keine gültige lokale Prüf-URL erhalten. Prüfen Sie die n8n-Antwort.', '未返回有效的本地审核链接，请检查 n8n 响应。'],
+  'Kev is processing your complaint': ['Kev verarbeitet Ihre Beschwerde', 'Kev 正在处理您的投诉'], 'Ready when you are': ['Bereit, wenn Sie es sind', '随时准备就绪'], 'Waiting for the actual n8n response.': ['Warten auf die tatsächliche n8n-Antwort.', '等待真实 n8n 响应。'], 'No prediction yet. Real results appear after local inference.': ['Noch keine Vorhersage. Echte Ergebnisse erscheinen nach lokaler Inferenz.', '暂无预测，本地推理后显示真实结果。'],
+  'Model-assisted routing supports human oversight. It does not diagnose confirmed vehicle defects.': ['Modellgestütztes Routing unterstützt menschliche Aufsicht. Es diagnostiziert keine bestätigten Fahrzeugdefekte.', '模型辅助分流支持人类监督，不诊断确认的车辆缺陷。'],
+  'HUMAN OVERSIGHT': ['MENSCHLICHE AUFSICHT', '人类监督'], 'Review Center': ['Prüfung', '审核'], 'Your existing local audit trail. No invented records, no second approval system.': ['Ihr bestehender lokaler Prüfverlauf. Keine erfundenen Einträge, kein zweites Freigabesystem.', '现有本地审计记录。不虚构记录，不另建审批系统。'],
+  'Refresh records': ['Einträge aktualisieren', '刷新记录'], 'Local review history': ['Lokaler Prüfverlauf', '本地审核历史'], 'Awaiting local connection': ['Warten auf lokale Verbindung', '等待本地连接'], 'Search complaint ID or reviewer…': ['Beschwerde-ID oder Prüfer suchen…', '搜索投诉编号或审核人…'],
+  'All decisions': ['Alle Entscheidungen', '全部决策'], 'Pending review': ['Prüfung ausstehend', '待审核'], 'Human review': ['Menschliche Prüfung', '人工审核'], 'Auto no': ['Automatisch Nein', '自动否'], 'Auto yes': ['Automatisch Ja', '自动是'], 'Newest first': ['Neueste zuerst', '最新优先'], 'Highest probability': ['Höchste Wahrscheinlichkeit', '最高概率'],
+  'COMPLAINT / REQUEST': ['BESCHWERDE / ANFRAGE', '投诉 / 请求'], 'PROBABILITY': ['WAHRSCHEINLICHKEIT', '概率'], 'ROUTING': ['ROUTING', '分流'], 'REVIEW STATUS': ['PRÜFSTATUS', '审核状态'], 'HUMAN DECISION': ['MENSCHLICHE ENTSCHEIDUNG', '人工决策'], 'REVIEWER': ['PRÜFER', '审核人'], 'TIMESTAMPS': ['ZEITSTEMPEL', '时间戳'], 'FORM': ['FORMULAR', '表单'],
+  'No matching records': ['Keine passenden Einträge', '无匹配记录'], 'Try another search or filter.': ['Versuchen Sie eine andere Suche oder einen anderen Filter.', '请尝试其他搜索或筛选条件。'], 'Only the latest 50 records are requested. Search and filters apply to these returned records. Complaint narratives are not included in the history API.': ['Nur die neuesten 50 Einträge werden abgerufen. Suche und Filter gelten für diese Einträge. Beschwerdetexte sind nicht im Prüfverlauf enthalten.', '仅请求最新 50 条记录，搜索与筛选仅适用于返回的记录。历史接口不包含投诉叙述。'],
+  'EVIDENCE BEFORE AUTOMATION': ['EVIDENZ VOR AUTOMATISIERUNG', '先有证据，再自动化'], 'Model Intelligence': ['Forschung', '研究'], 'The measured trade-offs behind fine-tuned Kev 0.8B.': ['Die gemessenen Abwägungen hinter feinabgestimmtem Kev 0.8B.', '微调 Kev 0.8B 背后的实测权衡。'], 'VALIDATION RESULTS': ['VALIDIERUNGSERGEBNISSE', '验证结果'],
+  'F1 SCORE': ['F1-WERT', 'F1 分数'], 'RECALL': ['SENSITIVITÄT', '召回率'], 'P50 INFERENCE LATENCY': ['P50-INFERENZLATENZ', 'P50 推理延迟'], '+0.1018 improvement': ['+0,1018 Verbesserung', '+0.1018 提升'], '+0.0154 improvement': ['+0,0154 Verbesserung', '+0.0154 提升'], '−0.0613 decrease': ['−0,0613 Rückgang', '−0.0613 下降'], '+31.0 ms slower': ['+31,0 ms langsamer', '+31.0 ms 更慢'],
+  'Original vs. fine-tuned Kev': ['Originales vs. feinabgestimmtes Kev', '原始与微调 Kev'], 'Original Kev': ['Originales Kev', '原始 Kev'], 'Fine-tuned Kev': ['Feinabgestimmtes Kev', '微调 Kev'], 'VALIDATION METRIC': ['VALIDIERUNGSMETRIK', '验证指标'], 'ORIGINAL KEV': ['ORIGINALES KEV', '原始 KEV'], 'FINE-TUNED KEV': ['FEINABGESTIMMTES KEV', '微调 KEV'], 'CHANGE': ['ÄNDERUNG', '变化'], 'RELATIVE COMPARISON': ['RELATIVER VERGLEICH', '相对比较'], 'Higher is better': ['Höher ist besser', '越高越好'], 'Lower is better': ['Niedriger ist besser', '越低越好'],
+  'Selective automation': ['Selektive Automatisierung', '选择性自动化'], 'THRESHOLDS 0.01 / 0.99': ['SCHWELLEN 0.01 / 0.99', '阈值 0.01 / 0.99'], 'Observed auto-routing error': ['Beobachteter Auto-Routing-Fehler', '观察到的自动分流错误率'], 'Auto-NO false negatives / Auto-YES false positives': ['Auto-NO falsch negativ / Auto-YES falsch positiv', 'Auto-NO 假阴性 / Auto-YES 假阳性'],
+  'Validation observations only. Recall decreased and latency increased after fine-tuning. These results are not production safety guarantees.': ['Nur Validierungsbeobachtungen. Nach der Feinabstimmung sank die Sensitivität und stieg die Latenz. Keine Sicherheitsgarantien für den Produktionseinsatz.', '仅为验证观察结果。微调后召回率下降、延迟上升，非生产安全保证。'],
+  'Accuracy': ['Genauigkeit', '准确率'], 'Precision': ['Präzision', '精确率'], 'Recall': ['Sensitivität', '召回率'], 'F1 score': ['F1-Wert', 'F1 分数'], 'Average precision': ['Mittlere Präzision', '平均精确率'], 'Brier score': ['Brier-Wert', 'Brier 分数'], 'Calibration · ECE': ['Kalibrierung · ECE', '校准 · ECE'], 'Server p50 latency': ['Server-p50-Latenz', '服务端 p50 延迟'], 'Server p95 latency': ['Server-p95-Latenz', '服务端 p95 延迟'],
+};
+interface LanguageState { language: Language; setLanguage: (language: Language) => void; t: (text: string) => string }
+const Context = createContext<LanguageState>({ language: 'en', setLanguage: () => {}, t: text => text });
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [language, setLanguage] = useState<Language>('en');
+  const t = (text: string) => language === 'en' ? text : translations[text]?.[language === 'de' ? 0 : 1] ?? text;
+  return <Context.Provider value={{ language, setLanguage, t }}>{children}</Context.Provider>;
+}
+export const useLanguage = () => useContext(Context);

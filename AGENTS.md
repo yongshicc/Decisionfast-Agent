@@ -36,3 +36,6 @@ use the editor.
 - Do not add AI or routing logic to the frontend or proxy; the existing n8n workflow owns validation, inference, review, and audit records.
 - Bundle physical fonts and icons in public for offline exports; local PWA uses generateSW and a single guarded registrar, never registering in hosted previews.
 - Never cache API responses; review links stay in session memory and are accepted only for loopback URLs to keep complaint data local.
+
+- Keep language selection in a shared browser-safe React context around both hosted and local interfaces; translate presentation only, never API payloads or recorded decisions.
+- Use bundled original sculpture imagery and local variable fonts for the editorial experience so offline exports need no remote media.

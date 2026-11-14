@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { LanguageProvider } from "@/features/decidefast/language";
 import { LocalProvider } from "@/features/decidefast/context";
 import { Layout } from "@/features/decidefast/layout";
 
@@ -124,7 +125,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <LocalProvider><Layout><Outlet /></Layout></LocalProvider>
+      <LanguageProvider><LocalProvider><Layout><Outlet /></Layout></LocalProvider></LanguageProvider>
     </QueryClientProvider>
   );
 }
