@@ -9,6 +9,7 @@ export default defineConfig(({mode}) => {
  const env=loadEnv(mode,process.cwd(),'');
  return {
   root: resolve('local'), publicDir: resolve('public'),
+  define: { 'import.meta.env.VITE_DECIDEFAST_LOCAL': JSON.stringify('true') },
   resolve:{alias:{'@':resolve('src')}},
   plugins:[
    tanstackRouter({target:'react',routesDirectory:resolve('src/routes'),generatedRouteTree:resolve('src/routeTree.gen.ts'),autoCodeSplitting:false}),

@@ -32,6 +32,7 @@ use the editor.
 ## Application architecture
 - Keep file-based TanStack routes and shared client-side feature modules; both hosted preview and local SPA use the same interface to avoid diverging behavior.
 - Only standalone local scripts and Vite middleware may proxy n8n; bind to loopback and reject remote hosts/origins because review history is unauthenticated.
+- Enable local API calls only in the dedicated local Vite configuration; hosted preview must never register the local proxy or infer connectivity from the sandbox's localhost hostname.
 - Do not add AI or routing logic to the frontend or proxy; the existing n8n workflow owns validation, inference, review, and audit records.
 - Bundle physical fonts and icons in public for offline exports; local PWA uses generateSW and a single guarded registrar, never registering in hosted previews.
 - Never cache API responses; review links stay in session memory and are accepted only for loopback URLs to keep complaint data local.

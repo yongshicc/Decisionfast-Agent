@@ -20,7 +20,7 @@ export function safeReviewUrl(value?: string): string | undefined {
   return undefined;
 }
 async function request(path: string, init?: RequestInit) {
-  if (!isLocalHost(window.location.hostname)) throw new LocalApiError(0, 'This preview cannot reach your MacBook. Run DecideFast locally with N8N_BASE_URL=http://127.0.0.1:5678.');
+  if (import.meta.env['VITE_DECIDEFAST_LOCAL'] !== 'true' || !isLocalHost(window.location.hostname)) throw new LocalApiError(0, 'This preview cannot reach your MacBook. Run DecideFast locally with N8N_BASE_URL=http://127.0.0.1:5678.');
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 120000);
   try {
     const response = await fetch(path, { ...init, signal: controller.signal });

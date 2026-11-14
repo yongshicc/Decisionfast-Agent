@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { benchmarks, validation } from './data';
 import { analyzeComplaint, safeReviewUrl, fetchReviews } from './api';
 describe('Recorded validation rules',()=>{
@@ -6,7 +6,14 @@ describe('Recorded validation rules',()=>{
  it('retains fixed selective automation observations',()=>{expect(validation).toMatchObject({autoNoMax:.01,autoYesMin:.99,coverage:74.4,review:25.6,error:1.34,falseNegatives:7,falsePositives:3});});
 });
 describe('Real API only',()=>{
- afterEach(()=>vi.unstubAllGlobals());
+ beforeEach(()=>vi.stubEnv('VITE_DECIDEFAST_LOCAL','true'));
+ afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+ it('never calls local APIs from hosted preview even on the sandbox localhost',async()=>{
+  vi.stubEnv('VITE_DECIDEFAST_LOCAL','false');const fetch=vi.fn();vi.stubGlobal('fetch',fetch);
+  await expect(fetchReviews()).rejects.toMatchObject({status:0});
+  await expect(analyzeComplaint('PREVIEW-001','Do not send externally')).rejects.toMatchObject({status:0});
+  expect(fetch).not.toHaveBeenCalled();
+ });
  it('forwards complaint without inventing a result',async()=>{const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({decision:'AUTO_NO',probability:.003}),{status:200}));vi.stubGlobal('fetch',fetch);const r=await analyzeComplaint('CHECK-001','Reported symptom');expect(r.probability).toBe(.003);expect(JSON.parse(fetch.mock.calls[0]?.[1].body)).toEqual({complaint_id:'CHECK-001',complaint:'Reported symptom'});});
  it('preserves 202 real review responses',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({decision:'HUMAN_REVIEW',probability:.5,review_status:'PENDING_HUMAN_REVIEW'}),{status:202})));expect((await analyzeComplaint('CHECK-002','Review me')).decision).toBe('HUMAN_REVIEW');});
  it.each([400,502,503,504])('surfaces HTTP %s and the actual error',async(status)=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'Upstream actual error'}),{status})));await expect(analyzeComplaint('CHECK-003','Symptom')).rejects.toMatchObject({status,message:'{"error":"Upstream actual error"}'});});
