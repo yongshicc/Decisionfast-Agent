@@ -1,0 +1,1398 @@
+{
+  "name": "DecideFast — Offline Decision Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## DecideFast — Offline Decision Agent\n\n**What it does:** POST `{\"complaint\": \"...\"}` → local fine-tuned Kev 0.8B (MLX) scores *brakes* probability → AUTO_NO (≤ 0.01), AUTO_YES (≥ 0.99) or HUMAN_REVIEW (in between, never auto-approved).\n\n**Change the model endpoint:** edit only the **Config** node (`kev_endpoint`, thresholds, timeout). No other node needs changing.\n- Same Mac, n8n via npx/npm: `http://127.0.0.1:8010/v1/systemone`\n- n8n in Docker: `http://host.docker.internal:8010/v1/systemone`\n- n8n Cloud cannot reach localhost — use a tunnel URL or run n8n locally.\n\n**Export:** editor menu (⋯, top right) → *Download* → saves the workflow JSON.\n**Run locally:**\n1. Start the Kev MLX server on port 8010.\n2. `npx n8n` (or Docker), open http://localhost:5678.\n3. *Create workflow* → ⋯ → *Import from File* → pick the JSON (or `n8n import:workflow --input=decidefast.json`).\n4. Publish it, then:\n`curl -X POST http://localhost:5678/webhook/decidefast-offline-decision -H \"Content-Type: application/json\" -d '{\"complaint\":\"Brake pedal went to the floor\"}'`\n(Use /webhook-test/ while listening in the editor.)\n\n**Privacy:** successful production runs are not saved (workflow settings); failed runs are saved for debugging — switch to *Do not save* if needed. Responses never echo the complaint.\n\n**Audit trail (local Data Table `decidefast_review_audit`):** every HUMAN_REVIEW case gets a row (PENDING) when the 202 is sent, then is updated with HUMAN_YES / HUMAN_NO / ESCALATED or UNREVIEWED_EXPIRED. No complaint text or reviewer notes are stored; `auto_approved` is always false and `human_confirmed` is true only for a real YES/NO review.\nOptional input: `complaint_id` (else `req-<execution id>`).\nOn a fresh local n8n create the table first (Overview → Data tables) with the same name and columns, then import — nodes find it by name.\n**History:** `GET /webhook/decidefast-review-history?status=REVIEWED&complaint_id=...&limit=50` or open the table in the Data tables view.",
+        "height": 900,
+        "width": 560,
+        "color": 4
+      },
+      "id": "839a4096-b6db-4595-a643-b1827e0e8d13",
+      "name": "Setup & Export Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        784,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "decidefast-offline-decision",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e0810dda-91e4-4087-a2f8-bfff9333920c",
+      "name": "Receive Complaint",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7e30cc3e-cfbb-484a-a768-81ef3cebf764"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-endpoint",
+              "name": "kev_endpoint",
+              "type": "string",
+              "value": "http://127.0.0.1:8010/v1/systemone"
+            },
+            {
+              "id": "cfg-model",
+              "name": "model_name",
+              "type": "string",
+              "value": "local"
+            },
+            {
+              "id": "cfg-no",
+              "name": "auto_no_max",
+              "type": "number",
+              "value": 0.01
+            },
+            {
+              "id": "cfg-yes",
+              "name": "auto_yes_min",
+              "type": "number",
+              "value": 0.99
+            },
+            {
+              "id": "cfg-timeout",
+              "name": "timeout_ms",
+              "type": "number",
+              "value": 30000
+            },
+            {
+              "id": "cfg-max",
+              "name": "max_complaint_chars",
+              "type": "number",
+              "value": 8000
+            },
+            {
+              "id": "cfg-complaint",
+              "name": "complaint",
+              "type": "string",
+              "value": "={{ typeof $json.body?.complaint === 'string' ? $json.body.complaint.trim() : '' }}"
+            },
+            {
+              "id": "cfg-cid",
+              "name": "complaint_id",
+              "type": "string",
+              "value": "={{ (v => (typeof v === 'string' || typeof v === 'number') && String(v).trim() !== '' ? String(v).trim().slice(0, 128) : 'req-' + $execution.id)($json.body?.complaint_id) }}"
+            },
+            {
+              "id": "cfg-mver",
+              "name": "model_version",
+              "type": "string",
+              "value": "kev-0.8b-nhtsa-mlx"
+            },
+            {
+              "id": "cfg-audit",
+              "name": "audit_table",
+              "type": "string",
+              "value": "decidefast_review_audit"
+            },
+            {
+              "id": "cfg-ctype",
+              "name": "complaint_received_type",
+              "type": "string",
+              "value": "={{ $json.body?.complaint === undefined || $json.body?.complaint === null ? 'missing' : typeof $json.body.complaint }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5724b0af-911a-4192-9c0c-68df992ca652",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        272,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.complaint }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "leftValue": "={{ $json.complaint.length }}",
+              "rightValue": "={{ $json.max_complaint_chars }}",
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "605e545a-ba92-4c95-9479-9875beba16ad",
+      "name": "Is Complaint Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "mis-start",
+              "name": "started_at_ms",
+              "type": "number",
+              "value": "={{ Date.now() }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "1c102ceb-6d98-474c-8640-b5a58e94b104",
+      "name": "Mark Inference Start",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        720,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.kev_endpoint }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": {{ JSON.stringify($json.model_name) }},\n  \"state\": {{ JSON.stringify($json.complaint) }},\n  \"questions\": {\n    \"brakes\": {\n      \"type\": \"noul\",\n      \"instructions\": \"Does this consumer vehicle safety complaint concern the service brakes or braking system?\"\n    }\n  }\n}",
+        "options": {
+          "response": {
+            "response": {}
+          },
+          "timeout": "={{ $json.timeout_ms }}"
+        }
+      },
+      "id": "4bcf0f8e-5ea5-4524-b55d-8063d37f5ace",
+      "name": "Call Kev Model",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        800,
+        320
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ (v => v !== null && v !== undefined && v !== '' && typeof v !== 'boolean' && !isNaN(Number(v)) && Number(v) >= 0 && Number(v) <= 1)($json.answers?.brakes?.noul) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "79aecb5d-b8f2-49f9-8142-e4dc55102463",
+      "name": "Is Model Response Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1024,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cd-prob",
+              "name": "probability",
+              "type": "number",
+              "value": "={{ Number($json.answers.brakes.noul) }}"
+            },
+            {
+              "id": "cd-dec",
+              "name": "decision",
+              "type": "string",
+              "value": "={{ Number($json.answers.brakes.noul) <= $('Config').item.json.auto_no_max ? 'AUTO_NO' : (Number($json.answers.brakes.noul) >= $('Config').item.json.auto_yes_min ? 'AUTO_YES' : 'HUMAN_REVIEW') }}"
+            },
+            {
+              "id": "cd-model",
+              "name": "model",
+              "type": "string",
+              "value": "={{ $json.model ?? $json.model_name ?? $('Config').item.json.model_name }}"
+            },
+            {
+              "id": "cd-lat",
+              "name": "inference_latency_ms",
+              "type": "number",
+              "value": "={{ Date.now() - $('Mark Inference Start').item.json.started_at_ms }}"
+            },
+            {
+              "id": "cd-kevlat",
+              "name": "model_reported_latency_ms",
+              "type": "string",
+              "value": "={{ String($json.latency_ms ?? $json.inference_ms ?? $json.timings?.total_ms ?? 'not reported') }}"
+            },
+            {
+              "id": "cd-thr",
+              "name": "thresholds",
+              "type": "object",
+              "value": "={{ { auto_no_max: $('Config').item.json.auto_no_max, auto_yes_min: $('Config').item.json.auto_yes_min } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "47ff47e0-0488-40ff-a232-e3358770d934",
+      "name": "Classify Decision",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1248,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "AUTO_NO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "AUTO_NO"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "AUTO_YES",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "AUTO_YES"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "HUMAN_REVIEW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "HUMAN_REVIEW"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5cbcd355-d7cf-487b-9715-31a1762af6ab",
+      "name": "Route Decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1328,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'ok', request_id: $execution.id, complaint_id: $('Config').item.json.complaint_id, decision: $json.decision, brakes_related: $json.decision === 'AUTO_YES', probability: $json.probability, review_status: 'NOT_REQUIRED', model: $json.model, inference_latency_ms: $json.inference_latency_ms, model_reported_latency_ms: $json.model_reported_latency_ms, thresholds: $json.thresholds } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "2c1a7877-4b03-401c-accb-59f62a538eae",
+      "name": "Respond Auto Decision",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1552,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'pending_review', request_id: $execution.id, complaint_id: $('Config').item.json.complaint_id, decision: 'HUMAN_REVIEW', brakes_related: null, probability: $json.probability, review_status: 'PENDING_HUMAN_REVIEW', review_url: $execution.resumeFormUrl, review_expires_in_hours: 72, model: $json.model, inference_latency_ms: $json.inference_latency_ms, model_reported_latency_ms: $json.model_reported_latency_ms, thresholds: $json.thresholds } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "b31607c2-b0b4-4821-b349-ff6f99031756",
+      "name": "Respond Pending Review",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1552,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "decidefast_review_audit"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "keyValue": "={{ String($execution.id) }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "complaint_id": "={{ $('Config').item.json.complaint_id }}",
+            "request_id": "={{ String($execution.id) }}",
+            "model_version": "={{ $('Config').item.json.model_version }}",
+            "model_reported": "={{ $json.model }}",
+            "probability": "={{ $json.probability }}",
+            "routing_decision": "={{ $json.decision }}",
+            "review_status": "PENDING_HUMAN_REVIEW",
+            "reviewer_decision": "PENDING",
+            "human_confirmed": false,
+            "auto_approved": false,
+            "reviewer": "",
+            "queued_at": "={{ DateTime.fromMillis($('Mark Inference Start').item.json.started_at_ms).toISO() }}",
+            "inference_latency_ms": "={{ $json.inference_latency_ms }}",
+            "auto_no_max": "={{ $json.thresholds.auto_no_max }}",
+            "auto_yes_min": "={{ $json.thresholds.auto_yes_min }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "complaint_id",
+              "displayName": "complaint_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "request_id",
+              "displayName": "request_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "model_version",
+              "displayName": "model_version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "model_reported",
+              "displayName": "model_reported",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "probability",
+              "displayName": "probability",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "routing_decision",
+              "displayName": "routing_decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "review_status",
+              "displayName": "review_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reviewer_decision",
+              "displayName": "reviewer_decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "human_confirmed",
+              "displayName": "human_confirmed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "auto_approved",
+              "displayName": "auto_approved",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reviewer",
+              "displayName": "reviewer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "queued_at",
+              "displayName": "queued_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reviewed_at",
+              "displayName": "reviewed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "closed_at",
+              "displayName": "closed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "inference_latency_ms",
+              "displayName": "inference_latency_ms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "auto_no_max",
+              "displayName": "auto_no_max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "auto_yes_min",
+              "displayName": "auto_yes_min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6428af3c-2206-4a3f-8039-759e53c18e4a",
+      "name": "Log Pending Review",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1776,
+        512
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resume": "form",
+        "formTitle": "DecideFast — Human Review Needed",
+        "formDescription": "={{ 'The Kev model was not confident enough to decide automatically (probability ' + $('Classify Decision').item.json.probability + ', auto range ≤ ' + $('Config').item.json.auto_no_max + ' or ≥ ' + $('Config').item.json.auto_yes_min + '). Request ' + $execution.id + '. Complaint: ' + $('Config').item.json.complaint }}",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Does this complaint concern the service brakes or braking system?",
+              "fieldType": "radio",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "YES"
+                  },
+                  {
+                    "option": "NO"
+                  },
+                  {
+                    "option": "ESCALATE"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Reviewer name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Reviewer notes",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "limitWaitTime": true,
+        "resumeAmount": 72,
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Thank you. Your review decision has been recorded."
+            }
+          }
+        }
+      },
+      "id": "5dd8fc5d-d990-4130-b427-9c912fd8829b",
+      "name": "Wait for Human Review",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1776,
+        320
+      ],
+      "webhookId": "f117e5ea-da54-4afa-9161-faca387e4c3d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "hd-req",
+              "name": "request_id",
+              "type": "string",
+              "value": "={{ $execution.id }}"
+            },
+            {
+              "id": "hd-prob",
+              "name": "probability",
+              "type": "number",
+              "value": "={{ $('Classify Decision').item.json.probability }}"
+            },
+            {
+              "id": "hd-final",
+              "name": "final_decision",
+              "type": "string",
+              "value": "={{ ($json[\"Does this complaint concern the service brakes or braking system?\"] ? ({ YES: 'HUMAN_YES', NO: 'HUMAN_NO', ESCALATE: 'ESCALATED' })[$json[\"Does this complaint concern the service brakes or braking system?\"]] : null) ?? 'UNREVIEWED_EXPIRED' }}"
+            },
+            {
+              "id": "hd-status",
+              "name": "review_status",
+              "type": "string",
+              "value": "={{ $json[\"Does this complaint concern the service brakes or braking system?\"] ? 'REVIEWED' : 'EXPIRED_NO_DECISION' }}"
+            },
+            {
+              "id": "hd-auto",
+              "name": "auto_approved",
+              "type": "boolean",
+              "value": false
+            },
+            {
+              "id": "hd-name",
+              "name": "reviewer",
+              "type": "string",
+              "value": "={{ $json['Reviewer name'] ?? '' }}"
+            },
+            {
+              "id": "hd-notes",
+              "name": "reviewer_notes",
+              "type": "string",
+              "value": "={{ $json['Reviewer notes'] ?? '' }}"
+            },
+            {
+              "id": "hd-at",
+              "name": "reviewed_at",
+              "type": "string",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7ee38390-d5d7-4789-a36e-39693a189e02",
+      "name": "Record Human Decision",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2000,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "decidefast_review_audit"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "keyValue": "={{ String($execution.id) }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "complaint_id": "={{ $('Config').item.json.complaint_id }}",
+            "request_id": "={{ String($execution.id) }}",
+            "model_version": "={{ $('Config').item.json.model_version }}",
+            "model_reported": "={{ $('Classify Decision').item.json.model }}",
+            "probability": "={{ $('Classify Decision').item.json.probability }}",
+            "routing_decision": "={{ $('Classify Decision').item.json.decision }}",
+            "review_status": "={{ $json.review_status }}",
+            "reviewer_decision": "={{ $json.final_decision }}",
+            "human_confirmed": "={{ $json.review_status === 'REVIEWED' && ['HUMAN_YES', 'HUMAN_NO'].includes($json.final_decision) }}",
+            "auto_approved": false,
+            "reviewer": "={{ $json.reviewer }}",
+            "queued_at": "={{ DateTime.fromMillis($('Mark Inference Start').item.json.started_at_ms).toISO() }}",
+            "reviewed_at": "={{ $json.review_status === 'REVIEWED' ? $json.reviewed_at : null }}",
+            "closed_at": "={{ $now.toISO() }}",
+            "inference_latency_ms": "={{ $('Classify Decision').item.json.inference_latency_ms }}",
+            "auto_no_max": "={{ $('Classify Decision').item.json.thresholds.auto_no_max }}",
+            "auto_yes_min": "={{ $('Classify Decision').item.json.thresholds.auto_yes_min }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "complaint_id",
+              "displayName": "complaint_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "request_id",
+              "displayName": "request_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "model_version",
+              "displayName": "model_version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "model_reported",
+              "displayName": "model_reported",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "probability",
+              "displayName": "probability",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "routing_decision",
+              "displayName": "routing_decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "review_status",
+              "displayName": "review_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reviewer_decision",
+              "displayName": "reviewer_decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "human_confirmed",
+              "displayName": "human_confirmed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "auto_approved",
+              "displayName": "auto_approved",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reviewer",
+              "displayName": "reviewer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "queued_at",
+              "displayName": "queued_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reviewed_at",
+              "displayName": "reviewed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "closed_at",
+              "displayName": "closed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "inference_latency_ms",
+              "displayName": "inference_latency_ms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "auto_no_max",
+              "displayName": "auto_no_max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "auto_yes_min",
+              "displayName": "auto_yes_min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9a287ede-1b3e-45b5-b95b-08368dd73643",
+      "name": "Save Review Outcome",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2448,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'error', error_code: 'INVALID_MODEL_RESPONSE', message: 'The Kev response did not contain a probability between 0 and 1 at answers.brakes.noul. No decision was made.', received_keys: Object.keys($json || {}), received_noul: $json.answers?.brakes?.noul ?? null, decision: null, review_status: 'NOT_DECIDED', request_id: $execution.id } }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "13f43317-a223-418c-a32c-54c0d1dbde2c",
+      "name": "Respond Invalid Model Output",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1248,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ae-detail",
+              "name": "detail",
+              "type": "string",
+              "value": "={{ (e => typeof e === 'string' ? e : [e?.message, e?.description, e?.code].filter(Boolean).join(' | '))($input.item.json.error) || 'Unknown error calling the Kev model' }}"
+            },
+            {
+              "id": "ae-code",
+              "name": "error_code",
+              "type": "string",
+              "value": "={{ (m => /timeout|timed out|etimedout|econnaborted/.test(m) ? 'MODEL_TIMEOUT' : (/econnrefused|enotfound|ehostunreach|socket hang up|getaddrinfo/.test(m) ? 'MODEL_UNREACHABLE' : 'MODEL_API_ERROR'))(JSON.stringify($input.item.json.error ?? '').toLowerCase()) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "64fe4bb4-a42f-4383-96eb-25e887c286f9",
+      "name": "Build Model Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1024,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'error', error_code: $json.error_code, message: $json.error_code === 'MODEL_TIMEOUT' ? 'The Kev model did not answer within ' + $('Config').item.json.timeout_ms + ' ms.' : ($json.error_code === 'MODEL_UNREACHABLE' ? 'Could not reach the Kev model at the configured endpoint. Is the MLX server running and is n8n on the same machine?' : 'The Kev model API returned an error.'), detail: $json.detail, decision: null, review_status: 'NOT_DECIDED', endpoint: $('Config').item.json.kev_endpoint, request_id: $execution.id } }}",
+        "options": {
+          "responseCode": "={{ $json.error_code === 'MODEL_TIMEOUT' ? 504 : ($json.error_code === 'MODEL_UNREACHABLE' ? 503 : 502) }}"
+        }
+      },
+      "id": "2bc71662-2310-4e33-ac63-13c2e5c2a893",
+      "name": "Respond Model Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1248,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ie-status",
+              "name": "http_status",
+              "type": "number",
+              "value": 400
+            },
+            {
+              "id": "ie-code",
+              "name": "error_code",
+              "type": "string",
+              "value": "={{ $json.complaint === '' ? 'MISSING_COMPLAINT' : 'COMPLAINT_TOO_LONG' }}"
+            },
+            {
+              "id": "ie-msg",
+              "name": "message",
+              "type": "string",
+              "value": "={{ $json.complaint === '' ? ($json.complaint_received_type === 'missing' ? 'The request body has no complaint field.' : ($json.complaint_received_type === 'string' ? 'The complaint field is empty.' : 'The complaint field must be a string, received ' + $json.complaint_received_type + '.')) + ' Send JSON like {\"complaint\": \"Brake pedal went to the floor while driving.\"}' : 'The complaint is longer than ' + $json.max_complaint_chars + ' characters. Shorten it and try again.' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "07f86fd4-8769-4379-a4cf-803626dbe52e",
+      "name": "Build Input Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'error', error_code: $json.error_code, message: $json.message, request_id: $execution.id } }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      },
+      "id": "700ae833-ece7-44d9-81f1-3e719ea50b49",
+      "name": "Respond Input Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        944,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "path": "decidefast-review-history",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "acd45a60-cbe7-4093-89c3-97d48250beaf",
+      "name": "Review History Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        224
+      ],
+      "webhookId": "6bb8481e-0cd9-4e09-9ccf-ba69c8b11701"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "decidefast_review_audit"
+        },
+        "returnAll": true,
+        "orderBy": true
+      },
+      "id": "d025c619-4aaf-420a-9ab2-6d1d1f09a762",
+      "name": "Load Audit Records",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        352
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => { const q = $('Review History Request').first().json.query || {}; let rows = $input.all().map(i => i.json).filter(r => Object.keys(r).length > 0); if (q.status) { rows = rows.filter(r => r.review_status === q.status || r.reviewer_decision === q.status); } if (q.complaint_id) { rows = rows.filter(r => String(r.complaint_id) === String(q.complaint_id)); } const lim = Math.min(Math.max(Number(q.limit) || 100, 1), 1000); return { status: 'ok', table: 'decidefast_review_audit', total_matching: rows.length, returned: Math.min(rows.length, lim), filters: { status: q.status || null, complaint_id: q.complaint_id || null, limit: lim }, rows: rows.slice(0, lim) }; })() }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "592911a2-cdfa-4470-91e0-2516bf461154",
+      "name": "Respond Review History",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        496,
+        352
+      ],
+      "executeOnce": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Complaint": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Is Complaint Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Complaint Valid": {
+      "main": [
+        [
+          {
+            "node": "Mark Inference Start",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Input Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Inference Start": {
+      "main": [
+        [
+          {
+            "node": "Call Kev Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Kev Model": {
+      "main": [
+        [
+          {
+            "node": "Is Model Response Valid",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Model Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Model Response Valid": {
+      "main": [
+        [
+          {
+            "node": "Classify Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid Model Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Decision": {
+      "main": [
+        [
+          {
+            "node": "Route Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Decision": {
+      "main": [
+        [
+          {
+            "node": "Respond Auto Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Auto Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Pending Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Pending Review": {
+      "main": [
+        [
+          {
+            "node": "Log Pending Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Pending Review": {
+      "main": [
+        [
+          {
+            "node": "Wait for Human Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Human Review": {
+      "main": [
+        [
+          {
+            "node": "Record Human Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Human Decision": {
+      "main": [
+        [
+          {
+            "node": "Save Review Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Model Error": {
+      "main": [
+        [
+          {
+            "node": "Respond Model Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Input Error": {
+      "main": [
+        [
+          {
+            "node": "Respond Input Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review History Request": {
+      "main": [
+        [
+          {
+            "node": "Load Audit Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Audit Records": {
+      "main": [
+        [
+          {
+            "node": "Respond Review History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": false
+  },
+  "versionId": "bab5beb4-4287-4a49-8c7f-80806f11ae55",
+  "meta": {
+    "instanceId": "5f0f7dd1f6167f60f5fa7dca83b8642a0067b06fdf0aa39626bd26f4a26758cc"
+  },
+  "nodeGroups": [
+    {
+      "id": "16a0f1ae-38d3-4d82-8866-1bfd33138642",
+      "name": "Validate incoming complaint",
+      "nodeIds": [
+        "5724b0af-911a-4192-9c0c-68df992ca652",
+        "605e545a-ba92-4c95-9479-9875beba16ad",
+        "07f86fd4-8769-4379-a4cf-803626dbe52e",
+        "700ae833-ece7-44d9-81f1-3e719ea50b49",
+        "1c102ceb-6d98-474c-8640-b5a58e94b104"
+      ],
+      "description": "Reads the POSTed complaint, holds endpoint and thresholds, and answers 400 with a clear message when text is missing"
+    },
+    {
+      "id": "c6a62a19-0238-49e7-826a-a93ee900f422",
+      "name": "Score with local model",
+      "nodeIds": [
+        "4bcf0f8e-5ea5-4524-b55d-8063d37f5ace",
+        "64fe4bb4-a42f-4383-96eb-25e887c286f9",
+        "2bc71662-2310-4e33-ac63-13c2e5c2a893",
+        "79aecb5d-b8f2-49f9-8142-e4dc55102463",
+        "13f43317-a223-418c-a32c-54c0d1dbde2c",
+        "47ff47e0-0488-40ff-a232-e3358770d934"
+      ],
+      "description": "Sends the complaint to the on-device Kev model; timeouts, outages and malformed answers return an error, never a guess"
+    },
+    {
+      "id": "49319513-ed52-4da9-8d76-15f9eb367ac4",
+      "name": "Answer or escalate",
+      "nodeIds": [
+        "5cbcd355-d7cf-487b-9715-31a1762af6ab",
+        "2c1a7877-4b03-401c-accb-59f62a538eae",
+        "b31607c2-b0b4-4821-b349-ff6f99031756",
+        "6428af3c-2206-4a3f-8039-759e53c18e4a",
+        "5dd8fc5d-d990-4130-b427-9c912fd8829b",
+        "7ee38390-d5d7-4789-a36e-39693a189e02",
+        "9a287ede-1b3e-45b5-b95b-08368dd73643"
+      ],
+      "description": "Confident scores answer at once; uncertain ones get 202, a review link and a local audit row, never auto-approved"
+    },
+    {
+      "id": "ddf7157f-4a99-498b-a508-620897a15bfe",
+      "name": "Serve review history",
+      "nodeIds": [
+        "d025c619-4aaf-420a-9ab2-6d1d1f09a762",
+        "592911a2-cdfa-4470-91e0-2516bf461154"
+      ],
+      "description": "GET returns the local review audit trail, newest first, filterable by status or complaint ID; no complaint text"
+    }
+  ],
+  "id": "DNluJT3O4t62N0s1",
+  "tags": []
+}
