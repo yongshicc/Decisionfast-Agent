@@ -39,3 +39,4 @@ use the editor.
 
 - Keep language selection in a shared browser-safe React context around both hosted and local interfaces; translate presentation only, never API payloads or recorded decisions.
 - Use bundled original sculpture imagery and local variable fonts for the editorial experience so offline exports need no remote media.
+- Derive research summaries and chart groups from recorded benchmark data, sharing visuals between Research and its client-only presentation dialog to prevent divergent evidence or live-service dependencies.

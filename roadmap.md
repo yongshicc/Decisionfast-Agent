@@ -1,4 +1,6 @@
 # DecideFast
+- [x] Upgrade Research with benchmark spotlight, interactive comparisons, automation evidence, experimental context, and multilingual presentation mode.
+- [x] Verify Research interactions and desktop/mobile recording layouts without local services.
 - [x] Redesign shared navigation and Experience with editorial typography and original sculpture imagery.
 - [x] Apply the coherent visual system to Decisions, Review, and Research with EN / DE / 中文 selection.
 - [x] Verify preserved local-only behavior and desktop/mobile presentation.
