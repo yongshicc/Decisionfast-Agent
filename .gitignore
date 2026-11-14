@@ -10,11 +10,41 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-local
 .output
 .vinxi
 .tanstack/**
 .nitro
 *.local
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local workflow data and model artifacts
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.safetensors
+*.gguf
+*.onnx
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.mlx
+*.npy
+*.npz
+*.parquet
+.n8n/
+models/
+checkpoints/
 
 # Wrangler / Cloudflare
 .wrangler/
