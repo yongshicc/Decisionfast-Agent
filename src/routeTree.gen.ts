@@ -10,33 +10,63 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LiveDecisionRouteImport } from './routes/live-decision'
+import { Route as ModelIntelligenceRouteImport } from './routes/model-intelligence'
+import { Route as ReviewsRouteImport } from './routes/reviews'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LiveDecisionRoute = LiveDecisionRouteImport.update({
+  id: '/live-decision',
+  path: '/live-decision',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModelIntelligenceRoute = ModelIntelligenceRouteImport.update({
+  id: '/model-intelligence',
+  path: '/model-intelligence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewsRoute = ReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/live-decision': typeof LiveDecisionRoute
+  '/model-intelligence': typeof ModelIntelligenceRoute
+  '/reviews': typeof ReviewsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/live-decision': typeof LiveDecisionRoute
+  '/model-intelligence': typeof ModelIntelligenceRoute
+  '/reviews': typeof ReviewsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/live-decision': typeof LiveDecisionRoute
+  '/model-intelligence': typeof ModelIntelligenceRoute
+  '/reviews': typeof ReviewsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/live-decision' | '/model-intelligence' | '/reviews'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/live-decision' | '/model-intelligence' | '/reviews'
+  id: '__root__' | '/' | '/live-decision' | '/model-intelligence' | '/reviews'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LiveDecisionRoute: typeof LiveDecisionRoute
+  ModelIntelligenceRoute: typeof ModelIntelligenceRoute
+  ReviewsRoute: typeof ReviewsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +78,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/live-decision': {
+      id: '/live-decision'
+      path: '/live-decision'
+      fullPath: '/live-decision'
+      preLoaderRoute: typeof LiveDecisionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/model-intelligence': {
+      id: '/model-intelligence'
+      path: '/model-intelligence'
+      fullPath: '/model-intelligence'
+      preLoaderRoute: typeof ModelIntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reviews': {
+      id: '/reviews'
+      path: '/reviews'
+      fullPath: '/reviews'
+      preLoaderRoute: typeof ReviewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LiveDecisionRoute: LiveDecisionRoute,
+  ModelIntelligenceRoute: ModelIntelligenceRoute,
+  ReviewsRoute: ReviewsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
